@@ -1,5 +1,10 @@
 const { ApolloServer } = require('@apollo/server');
-const { startStandaloneServer } = require('@apollo/server/standalone');
+const { expressMiddleware } = require('@apollo/server/express4');
+const { ApolloServerPluginDrainHttpServer } = require('@apollo/server/plugin/drainHttpServer');
+const express = require('express');
+const http = require('http');
+const cors = require('cors');
+const { json } = require('body-parser');
 require('dotenv').config();
 
 const books = [
@@ -28,15 +33,31 @@ const resolvers = {
     },
 };
 
-const server = new ApolloServer({
-    typeDefs,
-    resolvers,
-});
 const startServer = async () => {
-    const { url } = await startStandaloneServer(server, {
-        listen: { port: 4000 },
+    const app = express();
+    const httpServer = http.createServer(app);
+    const server = new ApolloServer({
+        typeDefs,
+        resolvers,
+        plugins: [ApolloServerPluginDrainHttpServer({ httpServer })],
     });
-    console.log(`🚀  Server ready at: ${url}`);
+    await server.start();
+    app.get("/test", (req, res) => {
+        res.json({
+            message: "Rest Api"
+        })
+    })
+    app.use(
+        '/graphql',
+        cors(),
+        json(),
+        expressMiddleware(server, {
+            context: async ({ req }) => ({ token: req.headers.token }),
+        }),
+    );
+    await new Promise((resolve) => httpServer.listen({ port: 4000 }, resolve));
+    console.log(`🚀 GrapQl Server ready at http://localhost:4000/graphql`);
+    console.log(`🚀 Express Server ready at http://localhost:4000/`);
 }
 
 try {
